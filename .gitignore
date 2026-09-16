@@ -1,0 +1,16 @@
+# PostgreSQL backups
+backup/*.sql
+
+# Environment/configuration files
+.env
+
+# Go build output
+*.exe
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
