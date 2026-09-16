@@ -94,11 +94,46 @@ func runBackup() {
 
 	if err != nil {
 		fmt.Println("Backup failed!")
-		fmt.Println(string(output))
+
+		if len(output) > 0 {
+			fmt.Println("Error:", string(output))
+		}
+
+		// Remove incomplete backup file if it was created
+		if _, fileErr := os.Stat(backupFile); fileErr == nil {
+			removeErr := os.Remove(backupFile)
+
+			if removeErr != nil {
+				fmt.Println("Warning: failed to remove incomplete backup:", removeErr)
+			} else {
+				fmt.Println("Removed incomplete backup:", backupFile)
+			}
+		}
+
+		return
+	}
+
+	// Verify that the backup file exists
+	fileInfo, err := os.Stat(backupFile)
+	if err != nil {
+		fmt.Println("Backup command succeeded, but backup file was not found:", err)
+		return
+	}
+
+	// Verify that the backup file is not empty
+	if fileInfo.Size() == 0 {
+		fmt.Println("Backup failed: backup file is empty")
+
+		removeErr := os.Remove(backupFile)
+		if removeErr != nil {
+			fmt.Println("Warning: failed to remove empty backup:", removeErr)
+		}
+
 		return
 	}
 
 	fmt.Println("Backup completed successfully!")
+	fmt.Println("Backup size:", fileInfo.Size(), "bytes")
 
 	// Keep only the latest 3 backups
 	cleanupOldBackups(backupDir, 3)
