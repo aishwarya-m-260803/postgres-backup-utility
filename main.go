@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,7 @@ func cleanupOldBackups(backupDir string, keep int) {
 
 		name := file.Name()
 
-		// Only consider our timestamped backup files
+		// Only consider timestamped FinPay backup files
 		if strings.HasPrefix(name, "finpay_") &&
 			strings.HasSuffix(name, ".sql") &&
 			name != "finpay_backup.sql" {
@@ -35,7 +36,7 @@ func cleanupOldBackups(backupDir string, keep int) {
 		}
 	}
 
-	// Sort newest first.
+	// Sort newest first based on the timestamp in the filename
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].Name() > backups[j].Name()
 	})
@@ -70,7 +71,7 @@ func runBackup() {
 	// Generate timestamp
 	timestamp := time.Now().Format("20060102_150405")
 
-	// Create backup filename
+	// Create timestamped backup filename
 	backupFile := filepath.Join(
 		backupDir,
 		fmt.Sprintf("finpay_%s.sql", timestamp),
@@ -105,17 +106,19 @@ func runBackup() {
 
 func main() {
 
-	fmt.Println("PostgreSQL backup service started.")
+	// Log the service start time only once
+	log.Println("PostgreSQL backup service started.")
+
 	fmt.Println("Backup interval: 8 hours")
 
-	// Run one backup immediately when the program starts
+	// Run one backup immediately when the service starts
 	runBackup()
 
-	// Create an 8-hour ticker
+	// Run the backup every 8 hours
 	ticker := time.NewTicker(8 * time.Hour)
 	defer ticker.Stop()
 
-	// Keep the program running
+	// Keep the service running
 	for {
 		<-ticker.C
 		runBackup()
