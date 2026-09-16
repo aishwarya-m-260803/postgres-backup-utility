@@ -57,7 +57,7 @@ func cleanupOldBackups(backupDir string, keep int) {
 	}
 }
 
-func runBackup() {
+func runBackup() bool {
 
 	backupDir := "backup"
 
@@ -65,7 +65,7 @@ func runBackup() {
 	err := os.MkdirAll(backupDir, 0755)
 	if err != nil {
 		fmt.Println("Failed to create backup directory:", err)
-		return
+		return false
 	}
 
 	// Generate timestamp
@@ -92,6 +92,7 @@ func runBackup() {
 
 	output, err := cmd.CombinedOutput()
 
+	// Handle pg_dump failure
 	if err != nil {
 		fmt.Println("Backup failed!")
 
@@ -104,20 +105,29 @@ func runBackup() {
 			removeErr := os.Remove(backupFile)
 
 			if removeErr != nil {
-				fmt.Println("Warning: failed to remove incomplete backup:", removeErr)
+				fmt.Println(
+					"Warning: failed to remove incomplete backup:",
+					removeErr,
+				)
 			} else {
-				fmt.Println("Removed incomplete backup:", backupFile)
+				fmt.Println(
+					"Removed incomplete backup:",
+					backupFile,
+				)
 			}
 		}
 
-		return
+		return false
 	}
 
 	// Verify that the backup file exists
 	fileInfo, err := os.Stat(backupFile)
 	if err != nil {
-		fmt.Println("Backup command succeeded, but backup file was not found:", err)
-		return
+		fmt.Println(
+			"Backup command succeeded, but backup file was not found:",
+			err,
+		)
+		return false
 	}
 
 	// Verify that the backup file is not empty
@@ -126,28 +136,55 @@ func runBackup() {
 
 		removeErr := os.Remove(backupFile)
 		if removeErr != nil {
-			fmt.Println("Warning: failed to remove empty backup:", removeErr)
+			fmt.Println(
+				"Warning: failed to remove empty backup:",
+				removeErr,
+			)
 		}
 
-		return
+		return false
 	}
 
+	// Backup was successful
 	fmt.Println("Backup completed successfully!")
 	fmt.Println("Backup size:", fileInfo.Size(), "bytes")
 
 	// Keep only the latest 3 backups
 	cleanupOldBackups(backupDir, 3)
+
+	return true
+}
+
+func backupWithRetry() {
+	const maxAttempts = 3
+	const retryDelay = 10 * time.Second
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+
+		fmt.Printf("Backup attempt %d of %d\n", attempt, maxAttempts)
+
+		if runBackup() {
+			fmt.Println("Backup process completed successfully.")
+			return
+		}
+
+		if attempt < maxAttempts {
+			fmt.Printf("Backup failed. Retrying in %v...\n", retryDelay)
+			time.Sleep(retryDelay)
+		}
+	}
+
+	fmt.Println("Backup failed after all retry attempts.")
 }
 
 func main() {
 
-	// Log the service start time only once
 	log.Println("PostgreSQL backup service started.")
 
 	fmt.Println("Backup interval: 8 hours")
 
 	// Run one backup immediately when the service starts
-	runBackup()
+	backupWithRetry()
 
 	// Run the backup every 8 hours
 	ticker := time.NewTicker(8 * time.Hour)
@@ -156,6 +193,6 @@ func main() {
 	// Keep the service running
 	for {
 		<-ticker.C
-		runBackup()
+		backupWithRetry()
 	}
 }
