@@ -9,7 +9,27 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
+
+type Config struct {
+	BackupInterval string `yaml:"backup_interval"`
+}
+
+func loadConfig(path string) (Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return Config{}, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	return cfg, nil
+}
 
 func cleanupOldBackups(backupDir string, keep int) {
 	files, err := os.ReadDir(backupDir)
@@ -181,13 +201,25 @@ func main() {
 
 	log.Println("PostgreSQL backup service started.")
 
-	fmt.Println("Backup interval: 8 hours")
+	// Load configuration
+	cfg, err := loadConfig("config.yaml")
+	if err != nil {
+		log.Fatalf("Error loading configuration: %v", err)
+	}
+
+	// Parse backup interval
+	interval, err := time.ParseDuration(cfg.BackupInterval)
+	if err != nil {
+		log.Fatalf("Invalid backup_interval '%s': %v", cfg.BackupInterval, err)
+	}
+
+	fmt.Println("Backup interval:", interval)
 
 	// Run one backup immediately when the service starts
 	backupWithRetry()
 
-	// Run the backup every 8 hours
-	ticker := time.NewTicker(8 * time.Hour)
+	// Run the backup at the configured interval
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	// Keep the service running
